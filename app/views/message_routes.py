@@ -89,6 +89,8 @@ def get_messages():
         # 转换为字典
         message_list = []
         for msg in messages:
+            # 打印原始和to_dict后的created_at，便于排查时区问题
+            print('原始created_at:', msg.created_at, 'to_dict:', msg.to_dict().get('created_at'))
             message_list.append({
                 'id': msg.id,
                 'name': msg.name,
