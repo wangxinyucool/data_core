@@ -35,5 +35,5 @@ def get_db():
 
 # 初始化数据库
 def init_db():
-    from models import Base
+    from .models import Base
     Base.metadata.create_all(bind=engine) 
