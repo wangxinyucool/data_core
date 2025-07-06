@@ -83,7 +83,7 @@ def submit_feedback():
             'data': {
                 'id': feedback.id,
                 'rating': feedback.rating,
-                'timestamp': feedback.timestamp.isoformat()
+                'timestamp': feedback.to_dict()['timestamp']
             }
         })
         
