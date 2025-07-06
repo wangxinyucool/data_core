@@ -89,6 +89,7 @@ def get_messages():
         # 转换为字典
         message_list = []
         for msg in messages:
+            msg_dict = msg.to_dict()
             message_list.append({
                 'id': msg.id,
                 'name': msg.name,
@@ -96,7 +97,7 @@ def get_messages():
                 'subject': msg.subject,
                 'content': msg.content,
                 'device_info': msg.device_info,
-                'created_at': msg.created_at.isoformat() if msg.created_at else None,
+                'created_at': msg_dict.get('created_at'),  # 用to_dict的中国时区时间
                 'is_read': msg.is_read,
                 'is_replied': msg.is_replied
             })
