@@ -1,7 +1,8 @@
 # app/__init__.py
 
-from flask import Flask
+from flask import Flask, send_from_directory
 from flask_cors import CORS
+import os
 
 
 def create_app():
@@ -32,6 +33,12 @@ def create_app():
     app.register_blueprint(message_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(pca_bp)
+
+    # 添加静态文件路由
+    @app.route('/uploads/pca/<path:filename>')
+    def uploaded_pca_file(filename):
+        uploads_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'uploads', 'pca')
+        return send_from_directory(uploads_dir, filename)
 
     # 提供一个根路由用于健康检查
     @app.route("/")
