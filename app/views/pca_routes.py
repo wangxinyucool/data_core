@@ -44,12 +44,16 @@ def load_data(file_path):
     else:
         return pd.read_excel(file_path)
 
-def preprocess_data(data, standardization, missing_value):
+def preprocess_data(data, standardization, missing_value, sample_name_column=None):
     """数据预处理"""
     # 自动过滤非数值列，只保留数值型列
     numeric_columns = []
     non_numeric_columns = []
     for col in data.columns:
+        # 如果是样本名称列，保留在非数值列中
+        if sample_name_column and col == sample_name_column:
+            non_numeric_columns.append(col)
+            continue
         # 尝试转换为数值，如果成功则保留
         try:
             pd.to_numeric(data[col], errors='raise')
@@ -62,30 +66,30 @@ def preprocess_data(data, standardization, missing_value):
     if len(numeric_columns) < 2:
         raise ValueError("数值型特征不足，至少需要2个数值型特征列")
     
-    # 只保留数值型列
-    data = data[numeric_columns]
+    # 只保留数值型列进行PCA分析
+    data_for_pca = data[numeric_columns]
     
     # 处理缺失值（现在只处理数值型列）
     if missing_value == '均值填充':
         imputer = SimpleImputer(strategy='mean')
-        data = pd.DataFrame(imputer.fit_transform(data), columns=data.columns)
+        data_for_pca = pd.DataFrame(imputer.fit_transform(data_for_pca), columns=data_for_pca.columns)
     elif missing_value == '中位数填充':
         imputer = SimpleImputer(strategy='median')
-        data = pd.DataFrame(imputer.fit_transform(data), columns=data.columns)
+        data_for_pca = pd.DataFrame(imputer.fit_transform(data_for_pca), columns=data_for_pca.columns)
     elif missing_value == '删除行':
-        data = data.dropna()
+        data_for_pca = data_for_pca.dropna()
     elif missing_value == '删除列':
-        data = data.dropna(axis=1)
+        data_for_pca = data_for_pca.dropna(axis=1)
     
     # 标准化
     if standardization == '标准化':
         scaler = StandardScaler()
-        data_scaled = scaler.fit_transform(data)
-        data = pd.DataFrame(data_scaled, columns=data.columns)
+        data_scaled = scaler.fit_transform(data_for_pca)
+        data_for_pca = pd.DataFrame(data_scaled, columns=data_for_pca.columns)
     elif standardization == '归一化':
         scaler = MinMaxScaler()
-        data_scaled = scaler.fit_transform(data)
-        data = pd.DataFrame(data_scaled, columns=data.columns)
+        data_scaled = scaler.fit_transform(data_for_pca)
+        data_for_pca = pd.DataFrame(data_scaled, columns=data_for_pca.columns)
     
     # 返回列信息
     column_info = {
@@ -94,13 +98,10 @@ def preprocess_data(data, standardization, missing_value):
         'total_columns': len(numeric_columns) + len(non_numeric_columns)
     }
     
-    return data, column_info
+    return data_for_pca, column_info
 
-def perform_pca_analysis(data, n_components=None, explained_variance_ratio=0.95, random_state=42, sample_name_column=None):
+def perform_pca_analysis(data, n_components=None, explained_variance_ratio=0.95, random_state=42, sample_name_column=None, original_raw_data=None):
     """执行PCA分析"""
-    # 保存原始数据用于获取样本名称
-    original_data = data.copy()
-    
     # 确定主成分数量
     if n_components is None:
         # 根据解释方差比例确定主成分数量
@@ -129,12 +130,13 @@ def perform_pca_analysis(data, n_components=None, explained_variance_ratio=0.95,
     comprehensive_scores = []
     # 获取样本名称
     sample_names = []
-    if sample_name_column and sample_name_column in original_data.columns:
-        sample_names = original_data[sample_name_column].astype(str).tolist()
-    elif hasattr(original_data, 'index') and not original_data.index.equals(pd.RangeIndex(len(original_data))):
-        sample_names = original_data.index.astype(str).tolist()
+    if sample_name_column and original_raw_data is not None and sample_name_column in original_raw_data.columns:
+        sample_names = original_raw_data[sample_name_column].astype(str).tolist()
+    elif hasattr(original_raw_data, 'index') and original_raw_data is not None and not original_raw_data.index.equals(pd.RangeIndex(len(original_raw_data))):
+        sample_names = original_raw_data.index.astype(str).tolist()
     else:
         sample_names = [f'Sample_{i+1}' for i in range(len(pca_result))]
+    
     for i, sample in enumerate(pca_result):
         simple_score = sample[0]
         weighted_score = 0
@@ -258,11 +260,11 @@ def analyze_data():
         
         raw_data = load_data(file_path)
         
-        # 数据预处理
-        processed_data, column_info = preprocess_data(raw_data, standardization, missing_value)
-        
         # 获取样本名称列参数
         sample_name_column = data.get('sampleNameColumn')
+        
+        # 数据预处理
+        processed_data, column_info = preprocess_data(raw_data, standardization, missing_value, sample_name_column)
         
         # 执行PCA分析
         analysis_result = perform_pca_analysis(
@@ -270,7 +272,8 @@ def analyze_data():
             n_components, 
             explained_variance_ratio, 
             random_state,
-            sample_name_column
+            sample_name_column,
+            raw_data # 传递原始数据给perform_pca_analysis
         )
         
         # 生成分析ID
