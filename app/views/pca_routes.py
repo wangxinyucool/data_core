@@ -306,7 +306,8 @@ def analyze_data():
             'featureImportance': analysis_result['feature_importance'],
             'featureWeights': analysis_result['feature_weights'],  # 新增：特征权重
             'comprehensiveScores': analysis_result['comprehensive_scores'],  # 新增：综合得分
-            'columnInfo': column_info  # 新增：列信息
+            'columnInfo': column_info,  # 新增：列信息
+            'explainedVariance': analysis_result['explained_variance']
         }
         
         return jsonify({
