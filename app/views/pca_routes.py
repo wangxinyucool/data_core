@@ -65,16 +65,7 @@ def preprocess_data(data, standardization, missing_value):
     # 只保留数值型列
     data = data[numeric_columns]
     
-    # 返回列信息
-    column_info = {
-        'numeric_columns': numeric_columns,
-        'non_numeric_columns': non_numeric_columns,
-        'total_columns': len(numeric_columns) + len(non_numeric_columns)
-    }
-    
-    return data, column_info
-    
-    # 处理缺失值
+    # 处理缺失值（现在只处理数值型列）
     if missing_value == '均值填充':
         imputer = SimpleImputer(strategy='mean')
         data = pd.DataFrame(imputer.fit_transform(data), columns=data.columns)
@@ -96,7 +87,14 @@ def preprocess_data(data, standardization, missing_value):
         data_scaled = scaler.fit_transform(data)
         data = pd.DataFrame(data_scaled, columns=data.columns)
     
-    return data
+    # 返回列信息
+    column_info = {
+        'numeric_columns': numeric_columns,
+        'non_numeric_columns': non_numeric_columns,
+        'total_columns': len(numeric_columns) + len(non_numeric_columns)
+    }
+    
+    return data, column_info
 
 def perform_pca_analysis(data, n_components=None, explained_variance_ratio=0.95, random_state=42, sample_name_column=None):
     """执行PCA分析"""
