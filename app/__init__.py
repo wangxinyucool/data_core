@@ -24,12 +24,14 @@ def create_app():
     from .views.feedback_routes import feedback_bp
     from .views.message_routes import message_bp
     from .views.admin_auth import admin_bp
+    from .views.pca_routes import pca_bp
     app.register_blueprint(map_bp)
     app.register_blueprint(heatmap_bp)
     app.register_blueprint(weather_bp)
     app.register_blueprint(feedback_bp)
     app.register_blueprint(message_bp)
     app.register_blueprint(admin_bp)
+    app.register_blueprint(pca_bp)
 
     # 提供一个根路由用于健康检查
     @app.route("/")
