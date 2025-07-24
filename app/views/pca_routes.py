@@ -414,8 +414,8 @@ def download_results():
             import shutil
             shutil.copy2(excel_file, final_file_path)
             
-            # 返回下载链接
-            download_url = f"{request.host_url.rstrip('/')}/uploads/pca/PCA_Analysis_{analysis_id[:8]}.xlsx"
+            # 返回下载链接 - 使用相对路径，让前端拼接完整URL
+            download_url = f"/uploads/pca/PCA_Analysis_{analysis_id[:8]}.xlsx"
             
             return jsonify({
                 'success': True,
