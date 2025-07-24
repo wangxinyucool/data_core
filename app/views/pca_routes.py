@@ -409,13 +409,20 @@ def download_results():
                     })
                 pd.DataFrame(scores_data).to_excel(writer, sheet_name='综合得分排序', index=False)
             
-            # 返回文件
-            return send_file(
-                excel_file,
-                as_attachment=True,
-                download_name=f"PCA_Analysis_{analysis_id[:8]}.xlsx",
-                mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-            )
+            # 将文件复制到uploads目录，使其可以通过HTTP访问
+            final_file_path = os.path.join(UPLOAD_FOLDER, f"PCA_Analysis_{analysis_id[:8]}.xlsx")
+            import shutil
+            shutil.copy2(excel_file, final_file_path)
+            
+            # 返回下载链接
+            download_url = f"{request.host_url.rstrip('/')}/uploads/pca/PCA_Analysis_{analysis_id[:8]}.xlsx"
+            
+            return jsonify({
+                'success': True,
+                'message': '文件生成成功',
+                'downloadUrl': download_url,
+                'filename': f"PCA_Analysis_{analysis_id[:8]}.xlsx"
+            })
     
     except Exception as e:
         return jsonify({'success': False, 'message': f'下载失败: {str(e)}'})
