@@ -216,6 +216,12 @@ def analyze_data():
         
         # 获取参数
         filename = data.get('filename')
+        print(f"接收到的参数: {data}")
+        print(f"filename: {filename}")
+        
+        if not filename:
+            return jsonify({'success': False, 'message': '缺少文件名参数'})
+            
         standardization = data.get('standardization', '标准化')
         missing_value = data.get('missingValue', '均值填充')
         n_components = data.get('nComponents')
