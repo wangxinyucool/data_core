@@ -12,6 +12,19 @@ import zipfile
 from datetime import datetime
 import uuid
 
+# 自定义JSON编码器处理NumPy类型
+class NumpyEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, np.bool_):
+            return bool(obj)
+        return super(NumpyEncoder, self).default(obj)
+
 pca_bp = Blueprint('pca', __name__)
 
 # 配置上传文件夹
@@ -83,14 +96,61 @@ def perform_pca_analysis(data, n_components=None, explained_variance_ratio=0.95,
     # 按重要性排序
     feature_importance.sort(key=lambda x: x['importance'], reverse=True)
     
+    # 计算综合得分
+    # 方法1：基于第一主成分的简单算法
+    first_component_weights = pca.components_[0]
+    
+    # 方法2：基于解释方差比例的加权算法（更标准）
+    # 综合得分 = Σ(主成分得分 × 解释方差比例)
+    comprehensive_scores = []
+    for i, sample in enumerate(pca_result):
+        # 简单算法：使用第一主成分得分
+        simple_score = sample[0]
+        
+        # 标准算法：加权综合得分
+        weighted_score = 0
+        for j, pc_score in enumerate(sample):
+            weighted_score += pc_score * pca.explained_variance_ratio_[j]
+        
+        comprehensive_scores.append({
+            'sample_index': i,
+            'sample_name': f'Sample_{i+1}',  # 默认样本名称
+            'simple_score': round(simple_score, 6),  # 简单算法得分
+            'weighted_score': round(weighted_score, 6),  # 加权算法得分
+            'principal_component_scores': sample.tolist()
+        })
+    
+    # 按加权综合得分排序（更标准）
+    comprehensive_scores.sort(key=lambda x: x['weighted_score'], reverse=True)
+    
+    # 添加排名
+    for i, score_item in enumerate(comprehensive_scores):
+        score_item['ranking'] = i + 1
+    
+    # 计算权重（基于第一主成分系数）
+    total_weight = sum(abs(first_component_weights))
+    feature_weights = []
+    for i, feature in enumerate(data.columns):
+        weight_percentage = (abs(first_component_weights[i]) / total_weight) * 100
+        feature_weights.append({
+            'name': feature,
+            'coefficient': round(first_component_weights[i], 4),
+            'weight_percentage': round(weight_percentage, 2)
+        })
+    
+    # 按权重排序
+    feature_weights.sort(key=lambda x: x['weight_percentage'], reverse=True)
+    
     return {
-        'pca_result': pca_result,
+        'pca_result': pca_result.tolist(),  # 转换为列表
         'explained_variance_ratio': pca.explained_variance_ratio_.tolist(),
         'cumulative_variance': np.cumsum(pca.explained_variance_ratio_).tolist(),
         'components': pca.components_.tolist(),
         'feature_importance': feature_importance[:10],  # 只返回前10个
-        'n_components': n_components,
-        'n_features': data.shape[1]
+        'feature_weights': feature_weights,  # 新增：特征权重
+        'comprehensive_scores': comprehensive_scores,  # 新增：综合得分
+        'n_components': int(n_components),  # 确保是整数
+        'n_features': int(data.shape[1])  # 确保是整数
     }
 
 @pca_bp.route('/api/pca/upload', methods=['POST'])
@@ -115,7 +175,21 @@ def upload_file():
             # 读取数据并生成预览
             try:
                 data = load_data(file_path)
-                preview = data.head(6).values.tolist()  # 前6行（包括标题）
+                
+                # 生成预览数据：包含列名和前5行数据
+                headers = data.columns.tolist()
+                preview_data = data.head(5).values.tolist()
+                
+                # 如果列数太多，只显示前20列，并添加提示
+                max_columns = 20
+                if len(headers) > max_columns:
+                    headers = headers[:max_columns]
+                    preview_data = [row[:max_columns] for row in preview_data]
+                    preview = [headers] + preview_data
+                    # 添加列数提示
+                    preview.append([f"（仅显示前{max_columns}列，共{data.shape[1]}列）"])
+                else:
+                    preview = [headers] + preview_data  # 第一行是列名，后面是数据
                 
                 return jsonify({
                     'success': True,
@@ -188,7 +262,7 @@ def analyze_data():
         # 保存到临时文件
         result_file = os.path.join(UPLOAD_FOLDER, f"{analysis_id}_results.json")
         with open(result_file, 'w', encoding='utf-8') as f:
-            json.dump(result_data, f, ensure_ascii=False, indent=2)
+            json.dump(result_data, f, ensure_ascii=False, indent=2, cls=NumpyEncoder)
         
         # 准备返回数据
         response_data = {
@@ -198,7 +272,9 @@ def analyze_data():
             'explainedVarianceRatio': round(analysis_result['explained_variance_ratio'][0], 4),
             'cumulativeVariance': round(analysis_result['cumulative_variance'][-1], 4),
             'componentContributions': [round(ratio * 100, 2) for ratio in analysis_result['explained_variance_ratio']],
-            'featureImportance': analysis_result['feature_importance']
+            'featureImportance': analysis_result['feature_importance'],
+            'featureWeights': analysis_result['feature_weights'],  # 新增：特征权重
+            'comprehensiveScores': analysis_result['comprehensive_scores']  # 新增：综合得分
         }
         
         return jsonify({
@@ -275,6 +351,27 @@ def download_results():
                             '系数': round(coef, 4)
                         })
                 pd.DataFrame(components_data).to_excel(writer, sheet_name='主成分系数', index=False)
+                
+                # 特征权重（对应图片表3）
+                weights_data = []
+                for weight in analysis_data['results']['feature_weights']:
+                    weights_data.append({
+                        '特征名称': weight['name'],
+                        '主成分1系数': weight['coefficient'],
+                        '权重百分比': f"{weight['weight_percentage']}%"
+                    })
+                pd.DataFrame(weights_data).to_excel(writer, sheet_name='特征权重', index=False)
+                
+                # 综合得分及排序（对应图片表4）
+                scores_data = []
+                for score in analysis_data['results']['comprehensive_scores']:
+                    scores_data.append({
+                        '样本名称': score['sample_name'],
+                        '简单算法得分': score['simple_score'],
+                        '加权算法得分': score['weighted_score'],
+                        '排序': score['ranking']
+                    })
+                pd.DataFrame(scores_data).to_excel(writer, sheet_name='综合得分排序', index=False)
             
             # 返回文件
             return send_file(
