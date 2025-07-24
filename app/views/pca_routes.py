@@ -70,7 +70,7 @@ def preprocess_data(data, standardization, missing_value):
     
     return data
 
-def perform_pca_analysis(data, n_components=None, explained_variance_ratio=0.95, random_state=42):
+def perform_pca_analysis(data, n_components=None, explained_variance_ratio=0.95, random_state=42, sample_name_column=None):
     """执行PCA分析"""
     # 确定主成分数量
     if n_components is None:
@@ -103,6 +103,21 @@ def perform_pca_analysis(data, n_components=None, explained_variance_ratio=0.95,
     # 方法2：基于解释方差比例的加权算法（更标准）
     # 综合得分 = Σ(主成分得分 × 解释方差比例)
     comprehensive_scores = []
+    
+    # 获取样本名称
+    sample_names = []
+    if sample_name_column and sample_name_column in data.columns:
+        # 使用指定的列作为样本名称
+        sample_names = data[sample_name_column].astype(str).tolist()
+        # 从数据中移除样本名称列，避免参与PCA分析
+        data = data.drop(columns=[sample_name_column])
+    elif hasattr(data, 'index') and not data.index.equals(pd.RangeIndex(len(data))):
+        # 如果数据有非默认索引，使用索引作为样本名称
+        sample_names = data.index.astype(str).tolist()
+    else:
+        # 否则使用默认名称
+        sample_names = [f'Sample_{i+1}' for i in range(len(pca_result))]
+    
     for i, sample in enumerate(pca_result):
         # 简单算法：使用第一主成分得分
         simple_score = sample[0]
@@ -114,7 +129,7 @@ def perform_pca_analysis(data, n_components=None, explained_variance_ratio=0.95,
         
         comprehensive_scores.append({
             'sample_index': i,
-            'sample_name': f'Sample_{i+1}',  # 默认样本名称
+            'sample_name': str(sample_names[i]) if i < len(sample_names) else f'Sample_{i+1}',  # 使用实际样本名称
             'simple_score': round(simple_score, 6),  # 简单算法得分
             'weighted_score': round(weighted_score, 6),  # 加权算法得分
             'principal_component_scores': sample.tolist()
@@ -240,12 +255,16 @@ def analyze_data():
         # 数据预处理
         processed_data = preprocess_data(raw_data, standardization, missing_value)
         
+        # 获取样本名称列参数
+        sample_name_column = data.get('sampleNameColumn')
+        
         # 执行PCA分析
         analysis_result = perform_pca_analysis(
             processed_data, 
             n_components, 
             explained_variance_ratio, 
-            random_state
+            random_state,
+            sample_name_column
         )
         
         # 生成分析ID
