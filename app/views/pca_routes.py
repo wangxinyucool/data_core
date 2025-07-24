@@ -11,6 +11,7 @@ import tempfile
 import zipfile
 from datetime import datetime
 import uuid
+from factor_analyzer.factor_analyzer import calculate_kmo
 
 # 自定义JSON编码器处理NumPy类型
 class NumpyEncoder(json.JSONEncoder):
@@ -265,7 +266,12 @@ def analyze_data():
         
         # 数据预处理
         processed_data, column_info = preprocess_data(raw_data, standardization, missing_value, sample_name_column)
-        
+        # 新增：KMO检验
+        try:
+            kmo_all, kmo_model = calculate_kmo(processed_data.values)
+            kmo_value = round(float(kmo_model), 4)
+        except Exception as e:
+            kmo_value = None
         # 执行PCA分析
         analysis_result = perform_pca_analysis(
             processed_data, 
@@ -310,7 +316,8 @@ def analyze_data():
             'featureWeights': analysis_result['feature_weights'],  # 新增：特征权重
             'comprehensiveScores': analysis_result['comprehensive_scores'],  # 新增：综合得分
             'columnInfo': column_info,  # 新增：列信息
-            'explainedVariance': analysis_result['explained_variance']
+            'explainedVariance': analysis_result['explained_variance'],
+            'kmo': kmo_value # 新增KMO
         }
         
         return jsonify({
