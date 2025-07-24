@@ -46,6 +46,34 @@ def load_data(file_path):
 
 def preprocess_data(data, standardization, missing_value):
     """数据预处理"""
+    # 自动过滤非数值列，只保留数值型列
+    numeric_columns = []
+    non_numeric_columns = []
+    for col in data.columns:
+        # 尝试转换为数值，如果成功则保留
+        try:
+            pd.to_numeric(data[col], errors='raise')
+            numeric_columns.append(col)
+        except (ValueError, TypeError):
+            # 如果转换失败，说明是非数值列，跳过
+            non_numeric_columns.append(col)
+            continue
+    
+    if len(numeric_columns) < 2:
+        raise ValueError("数值型特征不足，至少需要2个数值型特征列")
+    
+    # 只保留数值型列
+    data = data[numeric_columns]
+    
+    # 返回列信息
+    column_info = {
+        'numeric_columns': numeric_columns,
+        'non_numeric_columns': non_numeric_columns,
+        'total_columns': len(numeric_columns) + len(non_numeric_columns)
+    }
+    
+    return data, column_info
+    
     # 处理缺失值
     if missing_value == '均值填充':
         imputer = SimpleImputer(strategy='mean')
@@ -72,6 +100,9 @@ def preprocess_data(data, standardization, missing_value):
 
 def perform_pca_analysis(data, n_components=None, explained_variance_ratio=0.95, random_state=42, sample_name_column=None):
     """执行PCA分析"""
+    # 保存原始数据用于获取样本名称
+    original_data = data.copy()
+    
     # 确定主成分数量
     if n_components is None:
         # 根据解释方差比例确定主成分数量
@@ -106,14 +137,12 @@ def perform_pca_analysis(data, n_components=None, explained_variance_ratio=0.95,
     
     # 获取样本名称
     sample_names = []
-    if sample_name_column and sample_name_column in data.columns:
+    if sample_name_column and sample_name_column in original_data.columns:
         # 使用指定的列作为样本名称
-        sample_names = data[sample_name_column].astype(str).tolist()
-        # 从数据中移除样本名称列，避免参与PCA分析
-        data = data.drop(columns=[sample_name_column])
-    elif hasattr(data, 'index') and not data.index.equals(pd.RangeIndex(len(data))):
+        sample_names = original_data[sample_name_column].astype(str).tolist()
+    elif hasattr(original_data, 'index') and not original_data.index.equals(pd.RangeIndex(len(original_data))):
         # 如果数据有非默认索引，使用索引作为样本名称
-        sample_names = data.index.astype(str).tolist()
+        sample_names = original_data.index.astype(str).tolist()
     else:
         # 否则使用默认名称
         sample_names = [f'Sample_{i+1}' for i in range(len(pca_result))]
@@ -253,7 +282,7 @@ def analyze_data():
         raw_data = load_data(file_path)
         
         # 数据预处理
-        processed_data = preprocess_data(raw_data, standardization, missing_value)
+        processed_data, column_info = preprocess_data(raw_data, standardization, missing_value)
         
         # 获取样本名称列参数
         sample_name_column = data.get('sampleNameColumn')
@@ -299,7 +328,8 @@ def analyze_data():
             'componentContributions': [round(ratio * 100, 2) for ratio in analysis_result['explained_variance_ratio']],
             'featureImportance': analysis_result['feature_importance'],
             'featureWeights': analysis_result['feature_weights'],  # 新增：特征权重
-            'comprehensiveScores': analysis_result['comprehensive_scores']  # 新增：综合得分
+            'comprehensiveScores': analysis_result['comprehensive_scores'],  # 新增：综合得分
+            'columnInfo': column_info  # 新增：列信息
         }
         
         return jsonify({
