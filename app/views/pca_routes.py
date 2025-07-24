@@ -113,62 +113,43 @@ def perform_pca_analysis(data, n_components=None, explained_variance_ratio=0.95,
     pca = PCA(n_components=n_components, random_state=random_state)
     pca_result = pca.fit_transform(data)
     
-    # 计算特征重要性（基于主成分的系数）
+    # 只用PC1的绝对系数作为特征重要性，顺序与feature_weights一致
+    first_component_weights = pca.components_[0]
     feature_importance = []
     for i, feature in enumerate(data.columns):
-        importance = np.mean([abs(pca.components_[j][i]) for j in range(n_components)])
+        importance = abs(first_component_weights[i])
         feature_importance.append({
             'name': feature,
             'importance': round(importance, 4)
         })
-    
-    # 按重要性排序
+    # 按权重排序，与feature_weights顺序一致
     feature_importance.sort(key=lambda x: x['importance'], reverse=True)
     
     # 计算综合得分
-    # 方法1：基于第一主成分的简单算法
-    first_component_weights = pca.components_[0]
-    
-    # 方法2：基于解释方差比例的加权算法（更标准）
-    # 综合得分 = Σ(主成分得分 × 解释方差比例)
     comprehensive_scores = []
-    
     # 获取样本名称
     sample_names = []
     if sample_name_column and sample_name_column in original_data.columns:
-        # 使用指定的列作为样本名称
         sample_names = original_data[sample_name_column].astype(str).tolist()
     elif hasattr(original_data, 'index') and not original_data.index.equals(pd.RangeIndex(len(original_data))):
-        # 如果数据有非默认索引，使用索引作为样本名称
         sample_names = original_data.index.astype(str).tolist()
     else:
-        # 否则使用默认名称
         sample_names = [f'Sample_{i+1}' for i in range(len(pca_result))]
-    
     for i, sample in enumerate(pca_result):
-        # 简单算法：使用第一主成分得分
         simple_score = sample[0]
-        
-        # 标准算法：加权综合得分
         weighted_score = 0
         for j, pc_score in enumerate(sample):
             weighted_score += pc_score * pca.explained_variance_ratio_[j]
-        
         comprehensive_scores.append({
             'sample_index': i,
-            'sample_name': str(sample_names[i]) if i < len(sample_names) else f'Sample_{i+1}',  # 使用实际样本名称
-            'simple_score': round(simple_score, 6),  # 简单算法得分
-            'weighted_score': round(weighted_score, 6),  # 加权算法得分
+            'sample_name': str(sample_names[i]) if i < len(sample_names) else f'Sample_{i+1}',
+            'simple_score': round(simple_score, 6),
+            'weighted_score': round(weighted_score, 6),
             'principal_component_scores': sample.tolist()
         })
-    
-    # 按加权综合得分排序（更标准）
     comprehensive_scores.sort(key=lambda x: x['weighted_score'], reverse=True)
-    
-    # 添加排名
     for i, score_item in enumerate(comprehensive_scores):
         score_item['ranking'] = i + 1
-    
     # 计算权重（基于第一主成分系数）
     total_weight = sum(abs(first_component_weights))
     feature_weights = []
@@ -179,20 +160,18 @@ def perform_pca_analysis(data, n_components=None, explained_variance_ratio=0.95,
             'coefficient': round(first_component_weights[i], 4),
             'weight_percentage': round(weight_percentage, 2)
         })
-    
-    # 按权重排序
     feature_weights.sort(key=lambda x: x['weight_percentage'], reverse=True)
-    
     return {
-        'pca_result': pca_result.tolist(),  # 转换为列表
+        'pca_result': pca_result.tolist(),
         'explained_variance_ratio': pca.explained_variance_ratio_.tolist(),
         'cumulative_variance': np.cumsum(pca.explained_variance_ratio_).tolist(),
         'components': pca.components_.tolist(),
+        'explained_variance': pca.explained_variance_.tolist(),  # 新增：特征根
         'feature_importance': feature_importance[:10],  # 只返回前10个
-        'feature_weights': feature_weights,  # 新增：特征权重
-        'comprehensive_scores': comprehensive_scores,  # 新增：综合得分
-        'n_components': int(n_components),  # 确保是整数
-        'n_features': int(data.shape[1])  # 确保是整数
+        'feature_weights': feature_weights,
+        'comprehensive_scores': comprehensive_scores,
+        'n_components': int(n_components),
+        'n_features': int(data.shape[1])
     }
 
 @pca_bp.route('/api/pca/upload', methods=['POST'])
