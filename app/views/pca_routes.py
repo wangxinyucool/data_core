@@ -150,9 +150,28 @@ def perform_pca_analysis(data, n_components=None, explained_variance_ratio=0.95,
             'weighted_score': round(weighted_score, 6),
             'principal_component_scores': sample.tolist()
         })
-    comprehensive_scores.sort(key=lambda x: x['weighted_score'], reverse=True)
-    for i, score_item in enumerate(comprehensive_scores):
-        score_item['ranking'] = i + 1
+    
+    # 分别计算PC1和加权得分的排名
+    pc1_scores = sorted(comprehensive_scores, key=lambda x: x['simple_score'], reverse=True)
+    weighted_scores = sorted(comprehensive_scores, key=lambda x: x['weighted_score'], reverse=True)
+    
+    # 为每个样本分配两种排名
+    for score_item in comprehensive_scores:
+        # 找到PC1排名
+        for idx, item in enumerate(pc1_scores):
+            if item['sample_index'] == score_item['sample_index']:
+                score_item['pc1_ranking'] = idx + 1
+                break
+        else:
+            score_item['pc1_ranking'] = 1
+            
+        # 找到加权排名
+        for idx, item in enumerate(weighted_scores):
+            if item['sample_index'] == score_item['sample_index']:
+                score_item['weighted_ranking'] = idx + 1
+                break
+        else:
+            score_item['weighted_ranking'] = 1
     # 计算权重（基于第一主成分系数）
     total_weight = sum(abs(first_component_weights))
     feature_weights = []
@@ -240,8 +259,6 @@ def analyze_data():
         
         # 获取参数
         filename = data.get('filename')
-        print(f"接收到的参数: {data}")
-        print(f"filename: {filename}")
         
         if not filename:
             return jsonify({'success': False, 'message': '缺少文件名参数'})
@@ -410,11 +427,16 @@ def download_results():
                 for score in analysis_data['results']['comprehensive_scores']:
                     scores_data.append({
                         '样本名称': score['sample_name'],
-                        '简单算法得分': score['simple_score'],
-                        '加权算法得分': score['weighted_score'],
-                        '排序': score['ranking']
+                        'PC1得分': score['simple_score'],
+                        'PC1排名': score['pc1_ranking'],
+                        '加权得分': score['weighted_score'],
+                        '加权排名': score['weighted_ranking']
                     })
-                pd.DataFrame(scores_data).to_excel(writer, sheet_name='综合得分排序', index=False)
+                
+                # 按PC1排名排序，确保Excel中的顺序正确
+                scores_df = pd.DataFrame(scores_data)
+                scores_df = scores_df.sort_values('PC1排名')
+                scores_df.to_excel(writer, sheet_name='综合得分排序', index=False)
             
             # 将文件复制到uploads目录，使其可以通过HTTP访问
             final_file_path = os.path.join(UPLOAD_FOLDER, f"PCA_Analysis_{analysis_id[:8]}.xlsx")
