@@ -391,12 +391,12 @@ def download_results():
             with pd.ExcelWriter(excel_file, engine='openpyxl') as writer:
                 # 分析摘要
                 summary_data = {
-                    '指标': ['原始特征数', '主成分数', '解释方差比例', '累计解释方差', '是否进行系数翻转'],
+                    '指标': ['原始特征数', '主成分数', '解释方差比例（PC1）', '累计解释方差', '是否进行系数翻转'],
                     '值': [
                         analysis_data['results']['n_features'],
                         analysis_data['results']['n_components'],
-                        round(analysis_data['results']['explained_variance_ratio'][0], 4),
-                        round(analysis_data['results']['cumulative_variance'][-1], 4),
+                        round(analysis_data['results']['explained_variance_ratio'][0], 4) if analysis_data['results']['explained_variance_ratio'] else '-',
+                        round(analysis_data['results']['cumulative_variance'][-1], 4) if analysis_data['results']['cumulative_variance'] else '-',
                         '是' if analysis_data['results'].get('flipped', False) else '否'
                     ]
                 }
