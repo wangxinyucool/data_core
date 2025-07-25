@@ -115,14 +115,27 @@ def perform_pca_analysis(data, n_components=None, explained_variance_ratio=0.95,
     pca = PCA(n_components=n_components, random_state=random_state)
     pca_result = pca.fit_transform(data)
     
-    # 只用PC1的绝对系数作为特征重要性，顺序与feature_weights一致
+    # 检查第一主成分的所有系数是否都是负数
     first_component_weights = pca.components_[0]
+    all_negative = all(weight < 0 for weight in first_component_weights)
+    
+    # 如果所有系数都是负数，则翻转所有系数和得分
+    if all_negative:
+        # 翻转第一主成分系数
+        first_component_weights = -first_component_weights
+        # 翻转PCA结果（所有主成分得分）
+        pca_result = -pca_result
+        # 翻转所有主成分系数
+        pca.components_ = -pca.components_
+    
+    # 只用PC1的绝对系数作为特征重要性，顺序与feature_weights一致
     feature_importance = []
     for i, feature in enumerate(data.columns):
         importance = abs(first_component_weights[i])
         feature_importance.append({
             'name': feature,
-            'importance': round(importance, 4)
+            'importance': round(importance, 4),
+            'coefficient': round(first_component_weights[i], 4)  # 新增：包含系数信息
         })
     # 按权重排序，与feature_weights顺序一致
     feature_importance.sort(key=lambda x: x['importance'], reverse=True)
@@ -183,7 +196,9 @@ def perform_pca_analysis(data, n_components=None, explained_variance_ratio=0.95,
             'weight_percentage': round(weight_percentage, 2)
         })
     feature_weights.sort(key=lambda x: x['weight_percentage'], reverse=True)
-    return {
+    
+    # 添加翻转信息到返回结果中
+    result = {
         'pca_result': pca_result.tolist(),
         'explained_variance_ratio': pca.explained_variance_ratio_.tolist(),
         'cumulative_variance': np.cumsum(pca.explained_variance_ratio_).tolist(),
@@ -193,8 +208,11 @@ def perform_pca_analysis(data, n_components=None, explained_variance_ratio=0.95,
         'feature_weights': feature_weights,
         'comprehensive_scores': comprehensive_scores,
         'n_components': int(n_components),
-        'n_features': int(data.shape[1])
+        'n_features': int(data.shape[1]),
+        'flipped': all_negative  # 新增：标记是否进行了翻转
     }
+    
+    return result
 
 @pca_bp.route('/api/pca/upload', methods=['POST'])
 def upload_file():
@@ -334,7 +352,8 @@ def analyze_data():
             'comprehensiveScores': analysis_result['comprehensive_scores'],  # 新增：综合得分
             'columnInfo': column_info,  # 新增：列信息
             'explainedVariance': analysis_result['explained_variance'],
-            'kmo': kmo_value # 新增KMO
+            'kmo': kmo_value, # 新增KMO
+            'flipped': analysis_result.get('flipped', False)  # 新增：翻转标记
         }
         
         return jsonify({
@@ -372,15 +391,35 @@ def download_results():
             with pd.ExcelWriter(excel_file, engine='openpyxl') as writer:
                 # 分析摘要
                 summary_data = {
-                    '指标': ['原始特征数', '主成分数', '解释方差比例', '累计解释方差'],
+                    '指标': ['原始特征数', '主成分数', '解释方差比例', '累计解释方差', '是否进行系数翻转'],
                     '值': [
                         analysis_data['results']['n_features'],
                         analysis_data['results']['n_components'],
                         round(analysis_data['results']['explained_variance_ratio'][0], 4),
-                        round(analysis_data['results']['cumulative_variance'][-1], 4)
+                        round(analysis_data['results']['cumulative_variance'][-1], 4),
+                        '是' if analysis_data['results'].get('flipped', False) else '否'
                     ]
                 }
-                pd.DataFrame(summary_data).to_excel(writer, sheet_name='分析摘要', index=False)
+                summary_df = pd.DataFrame(summary_data)
+                summary_df.to_excel(writer, sheet_name='分析摘要', index=False)
+                
+                # 添加说明信息
+                explanation_data = {
+                    '说明项目': [
+                        '系数含义',
+                        '排名规则',
+                        '翻转说明',
+                        '使用建议'
+                    ],
+                    '详细说明': [
+                        '正系数：该特征值越大，综合得分越高；负系数：该特征值越大，综合得分越低',
+                        '排名按得分从高到低排序，第1名得分最高，排名越靠前越好',
+                        '如果所有系数均为负值，系统会自动翻转系数和得分，确保"分数越高越好"的直观理解',
+                        '建议优先使用PC1得分排序，当PC1解释方差较低时可考虑加权得分排序'
+                    ]
+                }
+                explanation_df = pd.DataFrame(explanation_data)
+                explanation_df.to_excel(writer, sheet_name='使用说明', index=False)
                 
                 # 主成分贡献度
                 pc_data = []
@@ -397,7 +436,8 @@ def download_results():
                 for feature in analysis_data['results']['feature_importance']:
                     feature_data.append({
                         '特征名称': feature['name'],
-                        '重要性': feature['importance']
+                        '重要性': feature['importance'],
+                        '系数': feature['coefficient']
                     })
                 pd.DataFrame(feature_data).to_excel(writer, sheet_name='特征重要性', index=False)
                 
