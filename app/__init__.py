@@ -26,6 +26,7 @@ def create_app():
     from .views.message_routes import message_bp
     from .views.admin_auth import admin_bp
     from .views.pca_routes import pca_bp
+    from .views.chart_routes import chart_bp
     app.register_blueprint(map_bp)
     app.register_blueprint(heatmap_bp)
     app.register_blueprint(weather_bp)
@@ -33,6 +34,7 @@ def create_app():
     app.register_blueprint(message_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(pca_bp)
+    app.register_blueprint(chart_bp)
 
     # 添加静态文件路由
     @app.route('/uploads/pca/<path:filename>')
