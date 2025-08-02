@@ -11,7 +11,7 @@ import tempfile
 import zipfile
 from datetime import datetime
 import uuid
-from factor_analyzer.factor_analyzer import calculate_kmo
+from factor_analyzer.factor_analyzer import calculate_kmo, calculate_bartlett_sphericity
 
 # 自定义JSON编码器处理NumPy类型
 class NumpyEncoder(json.JSONEncoder):
@@ -301,12 +301,20 @@ def analyze_data():
         
         # 数据预处理
         processed_data, column_info = preprocess_data(raw_data, standardization, missing_value, sample_name_column)
-        # 新增：KMO检验
+        # 新增：KMO检验和Bartlett检验
         try:
             kmo_all, kmo_model = calculate_kmo(processed_data.values)
             kmo_value = round(float(kmo_model), 4)
+            
+            # 新增：Bartlett球形检验
+            chi_square, p_value = calculate_bartlett_sphericity(processed_data.values)
+            bartlett_chi_square = round(float(chi_square), 4)
+            bartlett_p_value = round(float(p_value), 6)
+            
         except Exception as e:
             kmo_value = None
+            bartlett_chi_square = None
+            bartlett_p_value = None
         # 执行PCA分析
         analysis_result = perform_pca_analysis(
             processed_data, 
@@ -331,7 +339,10 @@ def analyze_data():
                 'explained_variance_ratio': explained_variance_ratio,
                 'random_state': random_state
             },
-            'results': analysis_result
+            'results': analysis_result,
+            'kmo': kmo_value,
+            'bartlett_chi_square': bartlett_chi_square,
+            'bartlett_p_value': bartlett_p_value
         }
         
         # 保存到临时文件
@@ -353,6 +364,8 @@ def analyze_data():
             'columnInfo': column_info,  # 新增：列信息
             'explainedVariance': analysis_result['explained_variance'],
             'kmo': kmo_value, # 新增KMO
+            'bartlettChiSquare': bartlett_chi_square, # 新增：Bartlett卡方值
+            'bartlettPValue': bartlett_p_value, # 新增：Bartlett P值
             'flipped': analysis_result.get('flipped', False)  # 新增：翻转标记
         }
         
@@ -391,12 +404,24 @@ def download_results():
             with pd.ExcelWriter(excel_file, engine='openpyxl') as writer:
                 # 分析摘要
                 summary_data = {
-                    '指标': ['原始特征数', '主成分数', '解释方差比例（PC1）', '累计解释方差', '是否进行系数翻转'],
+                    '指标': [
+                        '原始特征数', 
+                        '主成分数', 
+                        '解释方差比例（PC1）', 
+                        '累计解释方差', 
+                        'KMO值',
+                        'Bartlett卡方值',
+                        'Bartlett P值',
+                        '是否进行系数翻转'
+                    ],
                     '值': [
                         analysis_data['results']['n_features'],
                         analysis_data['results']['n_components'],
                         round(analysis_data['results']['explained_variance_ratio'][0], 4) if analysis_data['results']['explained_variance_ratio'] else '-',
                         round(analysis_data['results']['cumulative_variance'][-1], 4) if analysis_data['results']['cumulative_variance'] else '-',
+                        analysis_data.get('kmo', '-'),
+                        analysis_data.get('bartlett_chi_square', '-'),
+                        analysis_data.get('bartlett_p_value', '-'),
                         '是' if analysis_data['results'].get('flipped', False) else '否'
                     ]
                 }
@@ -410,6 +435,8 @@ def download_results():
                         '得分含义',
                         '排名规则',
                         '翻转说明',
+                        'KMO检验说明',
+                                                 'Bartlett球形检验说明',
                         '使用建议'
                     ],
                     '详细说明': [
@@ -417,6 +444,8 @@ def download_results():
                         '得分越高 = 综合表现越好；得分越低 = 综合表现越差；排名第1 = 综合表现最佳',
                         '排名按综合得分从高到低排序，第1名得分最高，排名越靠前越好',
                         '如果所有系数均为负值，系统会自动翻转系数和得分，确保"得分越高 = 表现越好"的直观理解',
+                        'KMO值越接近1越适合做PCA：≥0.9极好，≥0.8好，≥0.7一般，≥0.6较差，<0.6不适合',
+                                                 'Bartlett球形检验P值<0.05表示拒绝"变量间无相关性"的原假设，满足PCA基本前提；P值≥0.05表示变量间相关性不足',
                         '建议优先使用PC1得分排序，当PC1解释方差较低时可考虑加权得分排序'
                     ]
                 }
