@@ -38,6 +38,7 @@ test_*.py
 *.xlsx
 *.csv
 *.json
+!railway.json
 !app/shanxigeo/**/*.geojson
 
 # 输出文件
@@ -48,3 +49,4 @@ test_*.py
 *.bmp
 *.txt
 !README.md
+!runtime.txt
