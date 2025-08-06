@@ -23,11 +23,20 @@ def create_app():
     from .views.weather_routes import weather_bp
     from .views.feedback_routes import feedback_bp
     from .views.health_routes import health_bp
+    from .views.pca_routes import pca_bp  # 新增：导入PCA蓝图
+    from .views.chart_routes import chart_bp  # 新增：导入图表蓝图
+    from .views.message_routes import message_bp  # 新增：导入消息蓝图
+    from .views.admin_auth import admin_bp  # 新增：导入管理员认证蓝图
+    
     app.register_blueprint(map_bp)
     app.register_blueprint(heatmap_bp)
     app.register_blueprint(weather_bp)
     app.register_blueprint(feedback_bp)
     app.register_blueprint(health_bp)
+    app.register_blueprint(pca_bp)  # 新增：注册PCA蓝图
+    app.register_blueprint(chart_bp)  # 新增：注册图表蓝图
+    app.register_blueprint(message_bp)  # 新增：注册消息蓝图
+    app.register_blueprint(admin_bp)  # 新增：注册管理员认证蓝图
 
     # 提供一个根路由用于健康检查
     @app.route("/")
